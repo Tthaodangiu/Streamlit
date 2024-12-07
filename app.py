@@ -44,7 +44,7 @@ def detect_objects(frame, object_names, frame_limit, object_counts_input):
     if frame is None:
         st.warning("Không nhận được khung hình, bỏ qua xử lý!")
         return frame  # Bỏ qua nếu khung hình là None
-
+    
     height, width, _ = frame.shape
     blob = cv2.dnn.blobFromImage(frame, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
     net.setInput(blob)
@@ -123,9 +123,9 @@ for obj in object_names:
 
 # Thêm TURN Server cho môi trường đám mây
 TURN_SERVER = {
-    "urls": "turn:relay.metered.ca:80",  # TURN Server miễn phí
-    "username": "user",                  # Sửa lại với thông tin thật nếu cần
-    "credential": "pass",
+    "urls": "turn:turnserver.example.com",  # Thay thế bằng TURN Server của bạn
+    "username": "your_username",
+    "credential": "your_password",
 }
 
 # Khởi chạy camera với streamlit-webrtc
@@ -135,16 +135,21 @@ webrtc_ctx = webrtc_streamer(
     rtc_configuration={
         "iceServers": [
             {"urls": ["stun:stun.l.google.com:19302"]},
-            TURN_SERVER,  # Sử dụng TURN Server miễn phí
+            TURN_SERVER,  # Thêm TURN Server
         ]
     },
     media_stream_constraints={"video": True, "audio": False},  # Chỉ bật video
 )
 
 # Kiểm tra trạng thái camera
-if webrtc_ctx.state.playing:
+if webrtc_ctx and webrtc_ctx.state.playing:
     st.success("Camera đang hoạt động.")
+    # Kiểm tra trạng thái ICE nếu có thuộc tính
+    if hasattr(webrtc_ctx, "ice_connection_state"):
+        st.write("ICE Connection State: ", webrtc_ctx.ice_connection_state)
 else:
     st.warning("Không thể hiển thị video. Vui lòng kiểm tra kết nối hoặc cấu hình TURN Server.")
-    st.write("WebRTC State: ", webrtc_ctx.state)
-    st.write("ICE Connection State: ", webrtc_ctx.ice_connection_state)
+    if webrtc_ctx:
+        st.write("WebRTC State: ", webrtc_ctx.state)
+    else:
+        st.error("WebRTC context không được khởi tạo.")
