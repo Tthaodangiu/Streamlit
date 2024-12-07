@@ -1,16 +1,14 @@
 import cv2
 import numpy as np
-import pygame
 import streamlit as st
 
-# Cài đặt âm thanh
-pygame.mixer.init()
-alarm_sound = r"D:\AI\police.wav"
+# Đường dẫn đến tệp âm thanh cảnh báo
+alarm_sound = "police.wav"  # Đảm bảo file nằm trong cùng thư mục với mã Python
 
 # Đọc các file cấu hình và class
-config_file = r"D:\AI\yolov3.cfg"
-weights_file = r"D:\AI\yolov3.weights"
-classes_file = r"D:\AI\yolov3.txt"
+config_file = "yolov3.cfg"  # Thay bằng đường dẫn phù hợp
+weights_file = "yolov3.weights"
+classes_file = "yolov3.txt"
 
 # Đọc các lớp từ tệp
 with open(classes_file, 'r') as f:
@@ -124,19 +122,12 @@ if st.session_state.is_running:
         for obj in object_names:
             required_count = object_counts_input[obj]
             current_count = detected_objects[obj]
-            
+
             # Nếu số lượng vật thể phát hiện ít hơn yêu cầu, hiển thị cảnh báo
             if required_count > 0 and current_count < required_count:
-                missing_object = obj                                                                                                                                             
+                missing_object = obj
                 cv2.putText(frame, f"Warning: {missing_object} Missing!", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                pygame.mixer.music.load(alarm_sound)
-                pygame.mixer.music.play()
-            elif current_count >= required_count:  # Nếu số lượng vật thể đủ
-                cv2.putText(frame, f"{obj.capitalize()}: {current_count}/{required_count}", (50, 50 + object_names.index(obj) * 30), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-
-            # Cập nhật số lượng vật thể đã phát hiện
-            st.session_state.initial_objects_count[obj] = detected_objects[obj]
+                st.audio(alarm_sound, format="audio/wav", start_time=0)
 
         cv2.imshow("Object Detection", frame)
 
