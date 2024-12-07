@@ -39,7 +39,7 @@ except Exception as e:
 # Hàm lấy các lớp đầu ra từ YOLO
 def get_output_layers(net):
     layer_names = net.getLayerNames()
-    return [layer_names[i[0] - 1] for i in net.getUnconnectedOutLayers()]
+    return [layer_names[i[0] - 1] for i in net.getUnconnectedOutLayers()] 
 
 # Hàm xử lý YOLO
 def detect_objects(frame, object_names, frame_limit, object_counts_input):
