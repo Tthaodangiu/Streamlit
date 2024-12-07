@@ -1,13 +1,21 @@
 import cv2
 import numpy as np
 import streamlit as st
+import os
+import gdown  # Để tải file từ Google Drive
+
+# Kiểm tra và tải tệp yolov3.weights từ Google Drive nếu chưa tồn tại
+weights_file = "yolov3.weights"
+if not os.path.exists(weights_file):
+    drive_url = "https://drive.google.com/uc?id=11rE4um7BB12mtsgiq-D774qprMaRhjpm"
+    st.write("Downloading yolov3.weights from Google Drive...")
+    gdown.download(drive_url, weights_file, quiet=False)
 
 # Đường dẫn đến tệp âm thanh cảnh báo
 alarm_sound = "police.wav"  # Đảm bảo file nằm trong cùng thư mục với mã Python
 
 # Đọc các file cấu hình và class
 config_file = "yolov3.cfg"  # Thay bằng đường dẫn phù hợp
-weights_file = "yolov3.weights"
 classes_file = "yolov3.txt"
 
 # Đọc các lớp từ tệp
