@@ -3,6 +3,7 @@ import numpy as np
 import streamlit as st
 import os
 import gdown
+from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 
 # Kiểm tra và tải tệp yolov3.weights từ Google Drive nếu chưa tồn tại
 weights_file = "yolov3.weights"
@@ -41,7 +42,6 @@ def get_output_layers(net):
 # Hàm xử lý YOLO
 def detect_objects(frame, object_names):
     if frame is None:
-        st.warning("Không nhận được khung hình, bỏ qua xử lý!")
         return frame  # Bỏ qua nếu khung hình là None
     
     height, width, _ = frame.shape
@@ -82,22 +82,34 @@ def detect_objects(frame, object_names):
 
     return frame
 
+# Xác định lớp xử lý video
+class VideoTransformer(VideoTransformerBase):
+    def __init__(self, object_names):
+        self.object_names = object_names
+
+    def transform(self, frame):
+        if frame is None:
+            return None  # Trả về None nếu frame là None
+
+        try:
+            frame = cv2.cvtColor(frame.to_ndarray(), cv2.COLOR_BGR2RGB)
+            processed_frame = detect_objects(frame, self.object_names)
+            return cv2.cvtColor(processed_frame, cv2.COLOR_RGB2BGR)
+        except Exception as e:
+            st.error(f"Lỗi trong quá trình xử lý video: {e}")
+            return frame.to_ndarray()
+
 # Streamlit UI
 st.title("Object Detection with YOLO")
 object_names_input = st.sidebar.text_input('Enter Object Names (comma separated)', 'cell phone,laptop,umbrella')
 object_names = [obj.strip().lower() for obj in object_names_input.split(',')]
 
-# Nhận đầu vào từ camera của trình duyệt
-camera_input = st.camera_input("Capture Image")
-
-if camera_input:
-    # Đọc ảnh từ camera
-    image = cv2.imdecode(np.frombuffer(camera_input.getvalue(), np.uint8), cv2.IMREAD_COLOR)
-    
-    # Xử lý ảnh với YOLO
-    processed_frame = detect_objects(image, object_names)
-
-    # Hiển thị ảnh đã xử lý
-    st.image(cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB), channels="RGB")
-else:
-    st.write("Vui lòng cấp phép sử dụng camera hoặc tải ảnh lên.")
+# Khởi chạy camera với streamlit-webrtc (phát video trực tiếp)
+webrtc_streamer(
+    key="object-detection",
+    video_processor_factory=lambda: VideoTransformer(object_names),
+    rtc_configuration={
+        "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+    },
+    media_stream_constraints={"video": True, "audio": False},  # Chỉ bật video
+)
