@@ -42,6 +42,7 @@ def get_output_layers(net):
 # Hàm xử lý YOLO
 def detect_objects(frame, object_names, frame_limit, object_counts_input):
     if frame is None:
+        st.warning("Không nhận được khung hình, bỏ qua xử lý!")
         return frame  # Bỏ qua nếu khung hình là None
     
     height, width, _ = frame.shape
@@ -84,7 +85,6 @@ def detect_objects(frame, object_names, frame_limit, object_counts_input):
 
     return frame
 
-
 # Xác định lớp xử lý video
 class VideoTransformer(VideoTransformerBase):
     def __init__(self, object_names, frame_limit, object_counts_input):
@@ -94,16 +94,21 @@ class VideoTransformer(VideoTransformerBase):
 
     def transform(self, frame):
         if frame is None:
-            return None  # Trả về None nếu frame là None
+            st.error("Không nhận được khung hình từ camera.")
+            return None
 
         try:
-            frame = cv2.cvtColor(frame.to_ndarray(), cv2.COLOR_BGR2RGB)
-            processed_frame = detect_objects(frame, self.object_names, self.frame_limit, self.object_counts_input)
-            return cv2.cvtColor(processed_frame, cv2.COLOR_RGB2BGR)
-        except Exception as e:
-            st.error(f"Lỗi trong quá trình xử lý video: {e}")
-            return frame.to_ndarray()
+            # Chuyển khung hình từ WebRTC về dạng numpy array (BGR)
+            frame = frame.to_ndarray(format="bgr24")
 
+            # Xử lý khung hình với YOLO
+            processed_frame = detect_objects(frame, self.object_names, self.frame_limit, self.object_counts_input)
+
+            # Trả về khung hình đã xử lý
+            return processed_frame
+        except Exception as e:
+            st.error(f"Lỗi trong quá trình xử lý khung hình: {e}")
+            return frame
 
 # Streamlit UI
 st.title("Object Detection with YOLO")
@@ -124,7 +129,7 @@ TURN_SERVER = {
 }
 
 # Khởi chạy camera với streamlit-webrtc
-webrtc_streamer(
+webrtc_ctx = webrtc_streamer(
     key="object-detection",
     video_processor_factory=lambda: VideoTransformer(object_names, frame_limit, object_counts_input),
     rtc_configuration={
@@ -135,3 +140,9 @@ webrtc_streamer(
     },
     media_stream_constraints={"video": True, "audio": False},  # Chỉ bật video
 )
+
+# Kiểm tra trạng thái camera
+if webrtc_ctx.state.playing:
+    st.success("Camera đang hoạt động.")
+else:
+    st.warning("Không thể hiển thị video. Vui lòng kiểm tra kết nối hoặc cấu hình TURN Server.")
