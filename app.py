@@ -93,10 +93,10 @@ class VideoTransformer(VideoTransformerBase):
         self.object_counts_input = object_counts_input
 
     def transform(self, frame):
-        try:
-            if frame is None:
-                return frame.to_ndarray()  # Trả về nếu khung hình là None
+        if frame is None:
+            return None  # Trả về None nếu frame là None
 
+        try:
             frame = cv2.cvtColor(frame.to_ndarray(), cv2.COLOR_BGR2RGB)
             processed_frame = detect_objects(frame, self.object_names, self.frame_limit, self.object_counts_input)
             return cv2.cvtColor(processed_frame, cv2.COLOR_RGB2BGR)
