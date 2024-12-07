@@ -1,7 +1,6 @@
 import cv2
 import numpy as np
 import streamlit as st
-from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 import os
 import gdown
 
@@ -40,7 +39,7 @@ def get_output_layers(net):
     return [layer_names[i[0] - 1] for i in net.getUnconnectedOutLayers()]
 
 # Hàm xử lý YOLO
-def detect_objects(frame, object_names, frame_limit, object_counts_input):
+def detect_objects(frame, object_names):
     if frame is None:
         st.warning("Không nhận được khung hình, bỏ qua xử lý!")
         return frame  # Bỏ qua nếu khung hình là None
@@ -53,7 +52,6 @@ def detect_objects(frame, object_names, frame_limit, object_counts_input):
     class_ids = []
     confidences = []
     boxes = []
-    detected_objects = {obj: 0 for obj in object_names}
 
     for out in outs:
         for detection in out:
@@ -81,70 +79,46 @@ def detect_objects(frame, object_names, frame_limit, object_counts_input):
         label = str(classes[class_ids[i]])
         cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
         cv2.putText(frame, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
-        detected_objects[classes[class_ids[i]].lower()] += 1
 
     return frame
-
-# Xác định lớp xử lý video
-class VideoTransformer(VideoTransformerBase):
-    def __init__(self, object_names, frame_limit, object_counts_input):
-        self.object_names = object_names
-        self.frame_limit = frame_limit
-        self.object_counts_input = object_counts_input
-
-    def transform(self, frame):
-        if frame is None:
-            st.error("Không nhận được khung hình từ camera.")
-            return None
-
-        try:
-            # Chuyển khung hình từ WebRTC về dạng numpy array (BGR)
-            frame = frame.to_ndarray(format="bgr24")
-
-            # Xử lý khung hình với YOLO
-            processed_frame = detect_objects(frame, self.object_names, self.frame_limit, self.object_counts_input)
-
-            # Trả về khung hình đã xử lý
-            return processed_frame
-        except Exception as e:
-            st.error(f"Lỗi trong quá trình xử lý khung hình: {e}")
-            return frame
 
 # Streamlit UI
 st.title("Object Detection with YOLO")
 object_names_input = st.sidebar.text_input('Enter Object Names (comma separated)', 'cell phone,laptop,umbrella')
 object_names = [obj.strip().lower() for obj in object_names_input.split(',')]
-frame_limit = st.sidebar.slider('Set Frame Limit for Alarm', 1, 10, 3)
 
-# Nhập số lượng vật thể cần giám sát
-object_counts_input = {}
-for obj in object_names:
-    object_counts_input[obj] = st.sidebar.number_input(f'Enter number of {obj} to monitor', min_value=0, value=0, step=1)
+# Nút bật/tắt camera
+start_camera = st.button("Start Camera")
+stop_camera = st.button("Stop Camera")
 
-# Thêm STUN Server đầu tiên để kiểm tra kết nối
-rtc_configuration = {
-    "iceServers": [
-        {"urls": ["stun:stun.l.google.com:19302"]},
-    ]
-}
+if start_camera:
+    st.write("Camera is starting...")
+    cap = cv2.VideoCapture(0)
 
-# Khởi chạy camera với streamlit-webrtc
-webrtc_ctx = webrtc_streamer(
-    key="object-detection",
-    video_processor_factory=lambda: VideoTransformer(object_names, frame_limit, object_counts_input),
-    rtc_configuration=rtc_configuration,
-    media_stream_constraints={"video": True, "audio": False},  # Chỉ bật video
-)
+    if not cap.isOpened():
+        st.error("Không thể mở camera. Vui lòng kiểm tra lại thiết bị.")
+        st.stop()
 
-# Kiểm tra trạng thái camera
-if webrtc_ctx and webrtc_ctx.state.playing:
-    st.success("Camera đang hoạt động.")
-    # Kiểm tra trạng thái ICE nếu có thuộc tính
-    if hasattr(webrtc_ctx, "ice_connection_state"):
-        st.write("ICE Connection State: ", webrtc_ctx.ice_connection_state)
+    frame_window = st.image([])
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            st.warning("Không nhận được khung hình từ camera.")
+            break
+
+        # Xử lý khung hình
+        processed_frame = detect_objects(frame, object_names)
+
+        # Hiển thị khung hình đã xử lý
+        frame_window.image(cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB), channels="RGB")
+
+        # Dừng camera nếu nút "Stop Camera" được nhấn
+        if stop_camera:
+            st.write("Camera is stopping...")
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
 else:
-    st.warning("Không thể hiển thị video. Vui lòng kiểm tra kết nối hoặc cấu hình TURN Server.")
-    if webrtc_ctx:
-        st.write("WebRTC State: ", webrtc_ctx.state)
-    else:
-        st.error("WebRTC context không được khởi tạo.")
+    st.write("Camera is not running.")
