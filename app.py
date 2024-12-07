@@ -1,8 +1,9 @@
-import cv2
-import numpy as np
-import streamlit as st
 import os
 import gdown  # Để tải file từ Google Drive
+import numpy as np
+import streamlit as st
+import cv2
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, VideoFrame
 
 # Kiểm tra và tải tệp yolov3.weights từ Google Drive nếu chưa tồn tại
 weights_file = "yolov3.weights"
@@ -48,43 +49,16 @@ object_counts_input = {}
 for obj in object_names:
     object_counts_input[obj] = st.sidebar.number_input(f'Enter number of {obj} to monitor', min_value=0, value=0, step=1)
 
-start_button = st.button("Start")
-stop_button = st.button("Stop")
+# VideoProcessor để xử lý video frame từ camera
+class VideoProcessor(VideoProcessorBase):
+    def __init__(self):
+        self.frame_count = 0
 
-# Trạng thái camera và chạy chương trình
-if "cap" not in st.session_state:
-    st.session_state.cap = None
-if "is_running" not in st.session_state:
-    st.session_state.is_running = False
-if "object_not_found_counter" not in st.session_state:
-    st.session_state.object_not_found_counter = {obj: 0 for obj in object_names}  # Đếm vật thể không tìm thấy
-if "initial_objects_count" not in st.session_state:
-    st.session_state.initial_objects_count = {obj: 0 for obj in object_names}  # Lưu số lượng ban đầu của mỗi vật thể
-
-# Khi nhấn nút Start
-if start_button:
-    if st.session_state.cap is None or not st.session_state.cap.isOpened():
-        st.session_state.cap = cv2.VideoCapture(0)  # Mở lại camera
-    st.session_state.is_running = True
-
-# Khi nhấn nút Stop
-if stop_button:
-    st.session_state.is_running = False
-    if st.session_state.cap and st.session_state.cap.isOpened():
-        st.session_state.cap.release()
-        st.session_state.cap = None  # Đặt lại trạng thái camera
-    cv2.destroyAllWindows()
-
-# Vòng lặp xử lý camera
-if st.session_state.is_running:
-    while st.session_state.is_running:
-        ret, frame = st.session_state.cap.read()
-        if not ret:
-            st.write("Không thể đọc camera. Vui lòng kiểm tra thiết bị!")
-            break
-
-        height, width, channels = frame.shape
-        blob = cv2.dnn.blobFromImage(frame, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
+    def recv(self, frame: VideoFrame) -> VideoFrame:
+        # Chuyển đổi video frame thành ndarray để xử lý
+        image = frame.to_ndarray(format="bgr24")
+        height, width, channels = image.shape
+        blob = cv2.dnn.blobFromImage(image, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
         net.setInput(blob)
         outs = net.forward(get_output_layers(net))
 
@@ -120,8 +94,8 @@ if st.session_state.is_running:
                 x, y, w, h = box
                 color = COLORS[class_ids[i]]
                 label = str(classes[class_ids[i]])
-                cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
-                cv2.putText(frame, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
+                cv2.rectangle(image, (x, y), (x + w, y + h), color, 2)
+                cv2.putText(image, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
 
                 # Cập nhật số lượng vật thể đã phát hiện
                 detected_objects[classes[class_ids[i]].lower()] += 1
@@ -134,16 +108,10 @@ if st.session_state.is_running:
             # Nếu số lượng vật thể phát hiện ít hơn yêu cầu, hiển thị cảnh báo
             if required_count > 0 and current_count < required_count:
                 missing_object = obj
-                cv2.putText(frame, f"Warning: {missing_object} Missing!", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                cv2.putText(image, f"Warning: {missing_object} Missing!", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                 st.audio(alarm_sound, format="audio/wav", start_time=0)
 
-        cv2.imshow("Object Detection", frame)
+        return VideoFrame.from_ndarray(image, format="bgr24")
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            st.session_state.is_running = False
-
-    # Dừng camera sau khi kết thúc
-    if st.session_state.cap and st.session_state.cap.isOpened():
-        st.session_state.cap.release()
-        st.session_state.cap = None
-    cv2.destroyAllWindows()
+# Tạo WebRTC streamer để hiển thị camera trực tiếp
+webrtc_streamer(key="example", video_processor_factory=VideoProcessor)
