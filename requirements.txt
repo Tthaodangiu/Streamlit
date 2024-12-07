@@ -2,3 +2,4 @@ streamlit
 numpy
 pygame
 opencv-python-headless
+gdown
