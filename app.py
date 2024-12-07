@@ -41,6 +41,9 @@ def get_output_layers(net):
 
 # Hàm xử lý YOLO
 def detect_objects(frame, object_names, frame_limit, object_counts_input):
+    if frame is None:
+        return frame  # Bỏ qua nếu khung hình là None
+    
     height, width, _ = frame.shape
     blob = cv2.dnn.blobFromImage(frame, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
     net.setInput(blob)
@@ -91,6 +94,9 @@ class VideoTransformer(VideoTransformerBase):
 
     def transform(self, frame):
         try:
+            if frame is None:
+                return frame.to_ndarray()  # Trả về nếu khung hình là None
+
             frame = cv2.cvtColor(frame.to_ndarray(), cv2.COLOR_BGR2RGB)
             processed_frame = detect_objects(frame, self.object_names, self.frame_limit, self.object_counts_input)
             return cv2.cvtColor(processed_frame, cv2.COLOR_RGB2BGR)
@@ -113,7 +119,7 @@ for obj in object_names:
 # Khởi chạy camera với streamlit-webrtc
 webrtc_streamer(
     key="object-detection",
-    video_transformer_factory=lambda: VideoTransformer(object_names, frame_limit, object_counts_input),
+    video_processor_factory=lambda: VideoTransformer(object_names, frame_limit, object_counts_input),
     rtc_configuration={
         "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
     },
