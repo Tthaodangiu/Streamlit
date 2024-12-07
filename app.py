@@ -121,18 +121,10 @@ object_counts_input = {}
 for obj in object_names:
     object_counts_input[obj] = st.sidebar.number_input(f'Enter number of {obj} to monitor', min_value=0, value=0, step=1)
 
-# Thêm TURN Server cho môi trường đám mây
-TURN_SERVER = {
-    "urls": "turn:your_turn_server_url",  # Thay thế bằng TURN server của bạn
-    "username": "your_username",
-    "credential": "your_password",
-}
-
-# Cấu hình ICE server
+# Thêm STUN Server đầu tiên để kiểm tra kết nối
 rtc_configuration = {
     "iceServers": [
         {"urls": ["stun:stun.l.google.com:19302"]},
-        TURN_SERVER,  # Thêm TURN server
     ]
 }
 
