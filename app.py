@@ -3,7 +3,6 @@ import numpy as np
 import streamlit as st
 import os
 import gdown
-import time
 
 # Kiểm tra và tải tệp yolov3.weights từ Google Drive nếu chưa tồn tại
 weights_file = "yolov3.weights"
@@ -88,43 +87,17 @@ st.title("Object Detection with YOLO")
 object_names_input = st.sidebar.text_input('Enter Object Names (comma separated)', 'cell phone,laptop,umbrella')
 object_names = [obj.strip().lower() for obj in object_names_input.split(',')]
 
-# Nút bật/tắt camera
-camera_index = st.sidebar.selectbox("Select Camera", [0, 1, 2])  # Select camera index
-start_camera = st.button("Start Camera")
-stop_camera = st.button("Stop Camera")
+# Nhận đầu vào từ camera của trình duyệt
+camera_input = st.camera_input("Capture Image")
 
-cap = None  # Declare camera variable outside the if block
+if camera_input:
+    # Đọc ảnh từ camera
+    image = cv2.imdecode(np.frombuffer(camera_input.getvalue(), np.uint8), cv2.IMREAD_COLOR)
+    
+    # Xử lý ảnh với YOLO
+    processed_frame = detect_objects(image, object_names)
 
-if start_camera:
-    st.write("Camera is starting...")
-    cap = cv2.VideoCapture(camera_index)
-
-    if not cap.isOpened():
-        st.error("Không thể mở camera. Vui lòng kiểm tra lại thiết bị.")
-        st.stop()
-
-    frame_window = st.image([])
-
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            st.warning("Không nhận được khung hình từ camera.")
-            break
-
-        # Xử lý khung hình
-        processed_frame = detect_objects(frame, object_names)
-
-        # Hiển thị khung hình đã xử lý
-        frame_window.image(cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB), channels="RGB")
-
-        # Kiểm tra xem người dùng đã nhấn Stop Camera chưa
-        if stop_camera:
-            st.write("Camera is stopping...")
-            break
-
-        time.sleep(0.1)  # Pause briefly to simulate frame rate and allow UI updates
-
-    cap.release()
-    cv2.destroyAllWindows()
+    # Hiển thị ảnh đã xử lý
+    st.image(cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB), channels="RGB")
 else:
-    st.write("Camera is not running.")
+    st.write("Vui lòng cấp phép sử dụng camera hoặc tải ảnh lên.")
