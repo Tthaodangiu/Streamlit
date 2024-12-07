@@ -1,5 +1,6 @@
 streamlit
 numpy
-pygame
 opencv-python-headless
+pygame
+streamlit-webrtc
 gdown
