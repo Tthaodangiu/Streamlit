@@ -12,9 +12,13 @@ if not os.path.exists(weights_file):
     st.write("Downloading yolov3.weights from Google Drive...")
     gdown.download(drive_url, weights_file, quiet=False)
 
-# Đường dẫn đến các file cấu hình và class
+# Kiểm tra và tải các tệp cấu hình
 config_file = "yolov3.cfg"
 classes_file = "yolov3.txt"
+
+if not os.path.exists(config_file) or not os.path.exists(classes_file):
+    st.error("Tệp cấu hình hoặc tệp classes không tồn tại. Vui lòng kiểm tra lại!")
+    st.stop()
 
 # Đọc các lớp từ tệp
 with open(classes_file, 'r') as f:
@@ -24,8 +28,16 @@ with open(classes_file, 'r') as f:
 COLORS = np.random.uniform(0, 255, size=(len(classes), 3))
 
 # Tải mô hình YOLO
-net = cv2.dnn.readNet(weights_file, config_file)
+try:
+    net = cv2.dnn.readNet(weights_file, config_file)
+except Exception as e:
+    st.error(f"Lỗi khi tải mô hình YOLO: {e}")
+    st.stop()
 
+# Hàm lấy các lớp đầu ra từ YOLO
+def get_output_layers(net):
+    layer_names = net.getLayerNames()
+    return [layer_names[i[0] - 1] for i in net.getUnconnectedOutLayers()]
 
 # Hàm xử lý YOLO
 def detect_objects(frame, object_names, frame_limit, object_counts_input):
@@ -78,9 +90,13 @@ class VideoTransformer(VideoTransformerBase):
         self.object_counts_input = object_counts_input
 
     def transform(self, frame):
-        frame = cv2.cvtColor(frame.to_ndarray(), cv2.COLOR_BGR2RGB)
-        processed_frame = detect_objects(frame, self.object_names, self.frame_limit, self.object_counts_input)
-        return cv2.cvtColor(processed_frame, cv2.COLOR_RGB2BGR)
+        try:
+            frame = cv2.cvtColor(frame.to_ndarray(), cv2.COLOR_BGR2RGB)
+            processed_frame = detect_objects(frame, self.object_names, self.frame_limit, self.object_counts_input)
+            return cv2.cvtColor(processed_frame, cv2.COLOR_RGB2BGR)
+        except Exception as e:
+            st.error(f"Lỗi trong quá trình xử lý video: {e}")
+            return frame.to_ndarray()
 
 
 # Streamlit UI
@@ -98,5 +114,8 @@ for obj in object_names:
 webrtc_streamer(
     key="object-detection",
     video_transformer_factory=lambda: VideoTransformer(object_names, frame_limit, object_counts_input),
+    rtc_configuration={
+        "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+    },
     media_stream_constraints={"video": True, "audio": False},  # Chỉ bật video
 )
