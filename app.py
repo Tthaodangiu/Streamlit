@@ -11,6 +11,8 @@ if not os.path.exists(weights_file):
     drive_url = "https://drive.google.com/uc?id=11rE4um7BB12mtsgiq-D774qprMaRhjpm"
     st.write("Downloading yolov3.weights from Google Drive...")
     gdown.download(drive_url, weights_file, quiet=False)
+else:
+    st.write("Tệp yolov3.weights đã tồn tại, không cần tải lại.")
 
 # Kiểm tra và tải các tệp cấu hình
 config_file = "yolov3.cfg"
