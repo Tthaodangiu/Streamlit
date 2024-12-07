@@ -39,13 +39,10 @@ except Exception as e:
 # Hàm lấy các lớp đầu ra từ YOLO
 def get_output_layers(net):
     layer_names = net.getLayerNames()
-    return [layer_names[i[0] - 1] for i in net.getUnconnectedOutLayers()] 
+    return [layer_names[i[0] - 1] for i in net.getUnconnectedOutLayers()]
 
 # Hàm xử lý YOLO
-def detect_objects(frame, object_names, frame_limit, object_counts_input):
-    if frame is None:
-        return frame  # Bỏ qua nếu khung hình là None
-    
+def detect_objects(frame, object_names):
     height, width, _ = frame.shape
     blob = cv2.dnn.blobFromImage(frame, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
     net.setInput(blob)
@@ -54,7 +51,6 @@ def detect_objects(frame, object_names, frame_limit, object_counts_input):
     class_ids = []
     confidences = []
     boxes = []
-    detected_objects = {obj: 0 for obj in object_names}
 
     for out in outs:
         for detection in out:
@@ -82,48 +78,39 @@ def detect_objects(frame, object_names, frame_limit, object_counts_input):
         label = str(classes[class_ids[i]])
         cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
         cv2.putText(frame, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
-        detected_objects[classes[class_ids[i]].lower()] += 1
 
     return frame
 
 
 # Xác định lớp xử lý video
 class VideoTransformer(VideoTransformerBase):
-    def __init__(self, object_names, frame_limit, object_counts_input):
+    def __init__(self, object_names):
         self.object_names = object_names
-        self.frame_limit = frame_limit
-        self.object_counts_input = object_counts_input
 
     def transform(self, frame):
-        if frame is None:
-            return None  # Trả về None nếu frame là None
-
         try:
-            frame = cv2.cvtColor(frame.to_ndarray(), cv2.COLOR_BGR2RGB)
-            processed_frame = detect_objects(frame, self.object_names, self.frame_limit, self.object_counts_input)
-            return cv2.cvtColor(processed_frame, cv2.COLOR_RGB2BGR)
+            frame = frame.to_ndarray(format="bgr24")
+            processed_frame = detect_objects(frame, self.object_names)
+            return processed_frame
         except Exception as e:
             st.error(f"Lỗi trong quá trình xử lý video: {e}")
-            return frame.to_ndarray()
+            return frame
 
 
 # Streamlit UI
 st.title("Object Detection with YOLO")
 object_names_input = st.sidebar.text_input('Enter Object Names (comma separated)', 'cell phone,laptop,umbrella')
 object_names = [obj.strip().lower() for obj in object_names_input.split(',')]
-frame_limit = st.sidebar.slider('Set Frame Limit for Alarm', 1, 10, 3)
-
-# Nhập số lượng vật thể cần giám sát
-object_counts_input = {}
-for obj in object_names:
-    object_counts_input[obj] = st.sidebar.number_input(f'Enter number of {obj} to monitor', min_value=0, value=0, step=1)
 
 # Khởi chạy camera với streamlit-webrtc
 webrtc_streamer(
     key="object-detection",
-    video_processor_factory=lambda: VideoTransformer(object_names, frame_limit, object_counts_input),
+    video_processor_factory=lambda: VideoTransformer(object_names),
     rtc_configuration={
         "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
     },
-    media_stream_constraints={"video": True, "audio": False},  # Chỉ bật video
+    media_stream_constraints={
+        "video": True,  # Bật camera
+        "audio": False  # Tắt âm thanh để giảm tải
+    },
 )
