@@ -3,6 +3,7 @@ import numpy as np
 import streamlit as st
 import os
 import gdown
+import time
 
 # Kiểm tra và tải tệp yolov3.weights từ Google Drive nếu chưa tồn tại
 weights_file = "yolov3.weights"
@@ -88,12 +89,15 @@ object_names_input = st.sidebar.text_input('Enter Object Names (comma separated)
 object_names = [obj.strip().lower() for obj in object_names_input.split(',')]
 
 # Nút bật/tắt camera
+camera_index = st.sidebar.selectbox("Select Camera", [0, 1, 2])  # Select camera index
 start_camera = st.button("Start Camera")
 stop_camera = st.button("Stop Camera")
 
+cap = None  # Declare camera variable outside the if block
+
 if start_camera:
     st.write("Camera is starting...")
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(camera_index)
 
     if not cap.isOpened():
         st.error("Không thể mở camera. Vui lòng kiểm tra lại thiết bị.")
@@ -113,10 +117,12 @@ if start_camera:
         # Hiển thị khung hình đã xử lý
         frame_window.image(cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB), channels="RGB")
 
-        # Dừng camera nếu nút "Stop Camera" được nhấn
+        # Kiểm tra xem người dùng đã nhấn Stop Camera chưa
         if stop_camera:
             st.write("Camera is stopping...")
             break
+
+        time.sleep(0.1)  # Pause briefly to simulate frame rate and allow UI updates
 
     cap.release()
     cv2.destroyAllWindows()
