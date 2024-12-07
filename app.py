@@ -5,34 +5,54 @@ from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 import os
 import gdown
 
-# Kiểm tra tệp YOLO
+# Kiểm tra và tải tệp yolov3.weights từ Google Drive nếu chưa tồn tại
 weights_file = "yolov3.weights"
-config_file = "yolov3.cfg"
-classes_file = "yolov3.txt"
-
 if not os.path.exists(weights_file):
     drive_url = "https://drive.google.com/uc?id=11rE4um7BB12mtsgiq-D774qprMaRhjpm"
     st.write("Downloading yolov3.weights from Google Drive...")
     gdown.download(drive_url, weights_file, quiet=False)
 
+# Kiểm tra và tải các tệp cấu hình
+config_file = "yolov3.cfg"
+classes_file = "yolov3.txt"
+
 if not os.path.exists(config_file) or not os.path.exists(classes_file):
-    st.error("Tệp cấu hình hoặc classes không tồn tại!")
+    st.error("Tệp cấu hình hoặc tệp classes không tồn tại. Vui lòng kiểm tra lại!")
     st.stop()
 
+# Đọc các lớp từ tệp
 with open(classes_file, 'r') as f:
     classes = [line.strip() for line in f.readlines()]
 
+# Tạo màu sắc ngẫu nhiên cho các lớp đối tượng
 COLORS = np.random.uniform(0, 255, size=(len(classes), 3))
-net = cv2.dnn.readNet(weights_file, config_file)
 
-def detect_objects(frame, object_names):
+# Tải mô hình YOLO
+try:
+    net = cv2.dnn.readNet(weights_file, config_file)
+except Exception as e:
+    st.error(f"Lỗi khi tải mô hình YOLO: {e}")
+    st.stop()
+
+# Hàm lấy các lớp đầu ra từ YOLO
+def get_output_layers(net):
+    layer_names = net.getLayerNames()
+    return [layer_names[i[0] - 1] for i in net.getUnconnectedOutLayers()]
+
+# Hàm xử lý YOLO
+def detect_objects(frame, object_names, frame_limit, object_counts_input):
+    if frame is None:
+        return frame  # Bỏ qua nếu khung hình là None
+    
     height, width, _ = frame.shape
     blob = cv2.dnn.blobFromImage(frame, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
     net.setInput(blob)
-    outs = net.forward([net.getLayerNames()[i - 1] for i in net.getUnconnectedOutLayers()])
+    outs = net.forward(get_output_layers(net))
+
     class_ids = []
     confidences = []
     boxes = []
+    detected_objects = {obj: 0 for obj in object_names}
 
     for out in outs:
         for detection in out:
@@ -50,39 +70,68 @@ def detect_objects(frame, object_names):
                 confidences.append(float(confidence))
                 class_ids.append(class_id)
 
+    # Áp dụng Non-Maximum Suppression (NMS)
     indices = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
+
     for i in indices.flatten():
-        x, y, w, h = boxes[i]
-        label = str(classes[class_ids[i]])
+        box = boxes[i]
+        x, y, w, h = box
         color = COLORS[class_ids[i]]
+        label = str(classes[class_ids[i]])
         cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
         cv2.putText(frame, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
+        detected_objects[classes[class_ids[i]].lower()] += 1
 
     return frame
 
 
+# Xác định lớp xử lý video
 class VideoTransformer(VideoTransformerBase):
-    def __init__(self, object_names):
+    def __init__(self, object_names, frame_limit, object_counts_input):
         self.object_names = object_names
+        self.frame_limit = frame_limit
+        self.object_counts_input = object_counts_input
 
     def transform(self, frame):
-        frame = frame.to_ndarray(format="bgr24")
-        frame = detect_objects(frame, self.object_names)
-        return frame
+        if frame is None:
+            return None  # Trả về None nếu frame là None
+
+        try:
+            frame = cv2.cvtColor(frame.to_ndarray(), cv2.COLOR_BGR2RGB)
+            processed_frame = detect_objects(frame, self.object_names, self.frame_limit, self.object_counts_input)
+            return cv2.cvtColor(processed_frame, cv2.COLOR_RGB2BGR)
+        except Exception as e:
+            st.error(f"Lỗi trong quá trình xử lý video: {e}")
+            return frame.to_ndarray()
 
 
+# Streamlit UI
 st.title("Object Detection with YOLO")
-object_names_input = st.sidebar.text_input('Object Names (comma-separated)', 'person,cell phone,laptop')
-object_names = [name.strip().lower() for name in object_names_input.split(",")]
+object_names_input = st.sidebar.text_input('Enter Object Names (comma separated)', 'cell phone,laptop,umbrella')
+object_names = [obj.strip().lower() for obj in object_names_input.split(',')]
+frame_limit = st.sidebar.slider('Set Frame Limit for Alarm', 1, 10, 3)
 
+# Nhập số lượng vật thể cần giám sát
+object_counts_input = {}
+for obj in object_names:
+    object_counts_input[obj] = st.sidebar.number_input(f'Enter number of {obj} to monitor', min_value=0, value=0, step=1)
+
+# Thêm TURN Server cho môi trường đám mây
+TURN_SERVER = {
+    "urls": "turn:turnserver.example.com",  # Thay thế bằng TURN Server của bạn
+    "username": "your_username",
+    "credential": "your_password",
+}
+
+# Khởi chạy camera với streamlit-webrtc
 webrtc_streamer(
     key="object-detection",
-    video_processor_factory=lambda: VideoTransformer(object_names),
+    video_processor_factory=lambda: VideoTransformer(object_names, frame_limit, object_counts_input),
     rtc_configuration={
-        "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+        "iceServers": [
+            {"urls": ["stun:stun.l.google.com:19302"]},
+            TURN_SERVER,  # Thêm TURN Server
+        ]
     },
-    media_stream_constraints={
-        "video": True,
-        "audio": False,
-    },
+    media_stream_constraints={"video": True, "audio": False},  # Chỉ bật video
 )
