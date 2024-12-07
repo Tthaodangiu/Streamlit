@@ -123,21 +123,24 @@ for obj in object_names:
 
 # Thêm TURN Server cho môi trường đám mây
 TURN_SERVER = {
-    "urls": "turn:turnserver.example.com",  # Thay thế bằng TURN Server của bạn
+    "urls": "turn:your_turn_server_url",  # Thay thế bằng TURN server của bạn
     "username": "your_username",
     "credential": "your_password",
+}
+
+# Cấu hình ICE server
+rtc_configuration = {
+    "iceServers": [
+        {"urls": ["stun:stun.l.google.com:19302"]},
+        TURN_SERVER,  # Thêm TURN server
+    ]
 }
 
 # Khởi chạy camera với streamlit-webrtc
 webrtc_ctx = webrtc_streamer(
     key="object-detection",
     video_processor_factory=lambda: VideoTransformer(object_names, frame_limit, object_counts_input),
-    rtc_configuration={
-        "iceServers": [
-            {"urls": ["stun:stun.l.google.com:19302"]},
-            TURN_SERVER,  # Thêm TURN Server
-        ]
-    },
+    rtc_configuration=rtc_configuration,
     media_stream_constraints={"video": True, "audio": False},  # Chỉ bật video
 )
 
