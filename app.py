@@ -4,7 +4,6 @@ import streamlit as st
 import os
 import gdown
 from time import time
-import io
 from datetime import timedelta
 
 # Tải YOLO weights và config nếu chưa có
@@ -40,9 +39,9 @@ st.sidebar.header("Settings")
 object_names_input = st.sidebar.text_input("Enter Object Names (comma separated)", "cell phone,laptop,umbrella")
 object_names = [obj.strip().lower() for obj in object_names_input.split(',')]
 monitor_counts = {}
-lost_objects_time = {}  # Từ điển theo dõi thời gian mất
+lost_objects_time = {}  # Thời gian mất của từng đối tượng
 for obj in object_names:
-    monitor_counts[obj] = st.sidebar.number_input(f"Enter number of {obj} to monitor", min_value=0, value=0, step=1)
+    monitor_counts[obj] = st.sidebar.number_input(f"Enter number of {obj} to monitor", min_value=0, value=1, step=1)
 
 frame_limit = st.sidebar.slider("Set Frame Limit for Alarm (seconds)", 1, 10, 3)
 
@@ -76,9 +75,7 @@ if video_source == "Upload File":
 if cap is not None and start_button:
     stframe = st.empty()
     detected_objects = {}
-    lost_objects_time = {}
     alerted_objects = set()
-    start_time = time()
 
     while True:
         ret, frame = cap.read()
@@ -97,7 +94,6 @@ if cap is not None and start_button:
         confidences = []
         detected_objects.clear()
 
-        # Phân tích kết quả
         for out in outs:
             for detection in out:
                 scores = detection[5:]
@@ -120,32 +116,30 @@ if cap is not None and start_button:
                 color = COLORS[class_ids[i]]
                 cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
                 cv2.putText(frame, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
                 if label in detected_objects:
                     detected_objects[label] += 1
                 else:
                     detected_objects[label] = 1
 
-        # Kiểm tra vật thể thiếu
         current_time = time()
         for obj in object_names:
-            required_count = monitor_counts.get(obj, 0)
+            required_count = monitor_counts[obj]
             current_count = detected_objects.get(obj, 0)
 
-            # Nếu thiếu vật thể
-            if current_count < required_count:
+            if current_count < required_count:  # Vật thể bị mất
                 if obj not in lost_objects_time:
-                    lost_objects_time[obj] = current_time  # Ghi nhận thời điểm bắt đầu mất
+                    lost_objects_time[obj] = current_time  # Ghi nhận thời gian bắt đầu mất
                 else:
                     lost_duration = current_time - lost_objects_time[obj]
                     if lost_duration >= frame_limit and obj not in alerted_objects:
                         alerted_objects.add(obj)
                         st.warning(f"⚠️ ALERT: '{obj}' is missing for {str(timedelta(seconds=int(lost_duration)))}!")
                         play_alert_sound()
-            else:
-                lost_objects_time.pop(obj, None)  # Xóa thời gian mất nếu đã tìm thấy vật thể
-                alerted_objects.discard(obj)  # Xóa cảnh báo nếu vật thể trở lại
+            else:  # Vật thể xuất hiện lại
+                lost_objects_time.pop(obj, None)  # Xóa thời gian mất
+                alerted_objects.discard(obj)  # Xóa cảnh báo
 
-        # Hiển thị video
         stframe.image(frame, channels="BGR", use_container_width=True)
 
 if stop_button:
