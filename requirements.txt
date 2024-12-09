@@ -1,6 +1,9 @@
 streamlit
-numpy
-opencv-python-headless
-pygame
 streamlit-webrtc
+opencv-python-headless
+numpy
 gdown
+av
+urllib3
+pytube
+yt-dlp
