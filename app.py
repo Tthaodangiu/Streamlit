@@ -156,7 +156,11 @@ if cap is not None and start_button:
                 if obj in lost_objects_time:
                     del lost_objects_time[obj]
                 if obj in alerted_objects:
+                    # Xóa cảnh báo khi đối tượng quay lại
                     alerted_objects.remove(obj)
+                    st.success(f"✔️ '{obj}' is back!")
+                if obj not in alerted_objects:
+                    alerted_objects.add(obj)
 
         # Hiển thị video
         stframe.image(frame, channels="BGR", use_container_width=True)
