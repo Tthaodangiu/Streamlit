@@ -79,6 +79,7 @@ if cap is not None and start_button:
     detected_objects = {}
     lost_objects_time = {}
     alerted_objects = set()  # Để theo dõi các đối tượng đã cảnh báo
+    previously_detected = set()  # Để theo dõi các đối tượng đã được phát hiện trong các khung hình trước
     start_time = time()
 
     while True:
@@ -134,27 +135,29 @@ if cap is not None and start_button:
                 else:
                     detected_objects[label] = 1
 
-        # Kiểm tra vật thể thiếu và đã quay lại
+                # Nếu vật thể chưa được báo quay lại, thông báo
+                if label not in previously_detected:
+                    previously_detected.add(label)
+                    if label in lost_objects_time:
+                        # Đánh dấu vật thể quay lại
+                        lost_duration = time() - lost_objects_time[label]
+                        lost_time_str = str(timedelta(seconds=int(lost_duration)))
+                        st.success(f"🔔 '{label}' is back after {lost_time_str}!")
+                        lost_objects_time.pop(label)  # Xóa khỏi danh sách mất
+
+        # Kiểm tra vật thể thiếu
         current_time = time()
         for obj in object_names:
             required_count = monitor_counts.get(obj, 0)
             current_count = detected_objects.get(obj, 0)
 
-            if current_count < required_count:  # Đối tượng bị mất
+            if current_count < required_count:
                 if obj not in lost_objects_time:
                     lost_objects_time[obj] = current_time
-                else:
-                    lost_duration = current_time - lost_objects_time[obj]
-                    lost_time_str = str(timedelta(seconds=int(lost_duration)))
-
-                    if obj not in alerted_objects and lost_duration >= frame_limit:
-                        alerted_objects.add(obj)
-                        st.warning(f"⚠️ ALERT: '{obj}' is missing for {lost_time_str}!")
-                        play_alert_sound()
-            else:  # Đối tượng quay lại
-                if obj in lost_objects_time:  # Vật thể quay lại sau khi mất
-                    del lost_objects_time[obj]  # Xóa thời gian mất
-                if obj in alerted_objects:  # Xóa cảnh báo đã thông báo trước đó
+            else:
+                if obj in lost_objects_time:
+                    del lost_objects_time[obj]
+                if obj in alerted_objects:
                     alerted_objects.remove(obj)
 
         # Hiển thị video
