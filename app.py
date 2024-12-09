@@ -134,32 +134,28 @@ if cap is not None and start_button:
                 else:
                     detected_objects[label] = 1
 
-        # Kiểm tra vật thể thiếu
+        # Kiểm tra vật thể thiếu và đã quay lại
         current_time = time()
         for obj in object_names:
             required_count = monitor_counts.get(obj, 0)
             current_count = detected_objects.get(obj, 0)
 
-            if current_count < required_count:
+            if current_count < required_count:  # Đối tượng bị mất
                 if obj not in lost_objects_time:
                     lost_objects_time[obj] = current_time
                 else:
                     lost_duration = current_time - lost_objects_time[obj]
                     lost_time_str = str(timedelta(seconds=int(lost_duration)))
 
-                    # Chỉ thông báo mất đồ vật nếu đã mất đủ thời gian
                     if obj not in alerted_objects and lost_duration >= frame_limit:
                         alerted_objects.add(obj)
                         st.warning(f"⚠️ ALERT: '{obj}' is missing for {lost_time_str}!")
                         play_alert_sound()
-            else:
-                if obj in lost_objects_time:
-                    del lost_objects_time[obj]
-                if obj not in alerted_objects:
-                    # Chỉ thông báo quay lại nếu đã mất trước đó
-                    if obj in alerted_objects:
-                        alerted_objects.remove(obj)
-                        st.success(f"✔️ '{obj}' is back!")
+            else:  # Đối tượng quay lại
+                if obj in lost_objects_time:  # Vật thể quay lại sau khi mất
+                    del lost_objects_time[obj]  # Xóa thời gian mất
+                if obj in alerted_objects:  # Xóa cảnh báo đã thông báo trước đó
+                    alerted_objects.remove(obj)
 
         # Hiển thị video
         stframe.image(frame, channels="BGR", use_container_width=True)
