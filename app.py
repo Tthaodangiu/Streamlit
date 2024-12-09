@@ -147,7 +147,7 @@ if cap is not None and start_button:
                     lost_duration = current_time - lost_objects_time[obj]
                     lost_time_str = str(timedelta(seconds=int(lost_duration)))
 
-                    # Cập nhật cảnh báo nếu vật thể không còn trong video
+                    # Chỉ thông báo mất đồ vật nếu đã mất đủ thời gian
                     if obj not in alerted_objects and lost_duration >= frame_limit:
                         alerted_objects.add(obj)
                         st.warning(f"⚠️ ALERT: '{obj}' is missing for {lost_time_str}!")
@@ -155,12 +155,11 @@ if cap is not None and start_button:
             else:
                 if obj in lost_objects_time:
                     del lost_objects_time[obj]
-                if obj in alerted_objects:
-                    # Xóa cảnh báo khi đối tượng quay lại
-                    alerted_objects.remove(obj)
-                    st.success(f"✔️ '{obj}' is back!")
                 if obj not in alerted_objects:
-                    alerted_objects.add(obj)
+                    # Chỉ thông báo quay lại nếu đã mất trước đó
+                    if obj in alerted_objects:
+                        alerted_objects.remove(obj)
+                        st.success(f"✔️ '{obj}' is back!")
 
         # Hiển thị video
         stframe.image(frame, channels="BGR", use_container_width=True)
