@@ -25,7 +25,6 @@ COLORS = np.random.uniform(0, 255, size=(len(classes), 3))
 # Tải mô hình YOLO
 net = cv2.dnn.readNet(weights_file, config_file)
 
-# Hàm lấy layer đầu ra
 def get_output_layers(net):
     layer_names = net.getLayerNames()
     return [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
@@ -33,20 +32,20 @@ def get_output_layers(net):
 # Giao diện Streamlit
 st.title("Object Detection with YOLO")
 
-# Thanh bên trái để nhập thông tin
+# Thanh bên trái
 st.sidebar.header("Settings")
 object_names_input = st.sidebar.text_input("Enter Object Names (comma separated)", "cell phone,laptop,umbrella")
 object_names = [obj.strip().lower() for obj in object_names_input.split(',')]
 monitor_counts = {}
-lost_objects_frame = {}  # Đếm frame mất
+lost_objects_time = {}
 alerted_objects = set()
 
 for obj in object_names:
     monitor_counts[obj] = st.sidebar.number_input(f"Enter number of {obj} to monitor", min_value=0, value=1, step=1)
 
-frame_limit_seconds = st.sidebar.slider("Set Frame Limit for Alarm (seconds)", 1, 10, 3)
+alert_limit_seconds = st.sidebar.slider("Set Alarm Limit (seconds)", 1, 10, 3)
 
-# Chọn nguồn video
+# Video
 video_source = st.radio("Choose Video Source", ["Upload File"])
 temp_video_path = "temp_video.mp4"
 
@@ -55,7 +54,6 @@ stop_button = st.button("Stop and Delete Video")
 
 cap = None
 
-# Đọc file âm thanh cảnh báo
 def play_alert_sound():
     alert_audio_file = '/mnt/data/police.wav'
     if os.path.exists(alert_audio_file):
@@ -63,7 +61,6 @@ def play_alert_sound():
             audio_bytes = f.read()
             st.audio(audio_bytes, format='audio/wav')
 
-# Xử lý video từ nguồn
 if video_source == "Upload File":
     uploaded_file = st.file_uploader("Upload a video file", type=["mp4", "avi", "mov", "mkv"])
     if uploaded_file is not None:
@@ -75,25 +72,30 @@ if video_source == "Upload File":
 if cap is not None and start_button:
     stframe = st.empty()
     fps = cap.get(cv2.CAP_PROP_FPS)
-    frame_limit = int(fps * frame_limit_seconds)  # Tính ngưỡng frame mất
+    if fps == 0 or fps is None:
+        fps = 30  # Fallback nếu không đọc được FPS
+    frame_limit = int(fps * alert_limit_seconds)
+
+    frame_count = 0  # Đếm số frame
+    lost_objects_time.clear()
 
     while True:
         ret, frame = cap.read()
         if not ret:
-            st.warning("Video ended or no frames available.")
+            st.warning("Video ended.")
             break
+
+        frame_count += 1
+        timestamp = str(timedelta(seconds=frame_count // fps))  # Thời gian thực của frame
 
         height, width, _ = frame.shape
         detected_objects = {}
 
-        # Phát hiện vật thể
         blob = cv2.dnn.blobFromImage(frame, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
         net.setInput(blob)
         outs = net.forward(get_output_layers(net))
 
-        boxes = []
-        class_ids = []
-        confidences = []
+        boxes, class_ids, confidences = [], [], []
 
         for out in outs:
             for detection in out:
@@ -109,7 +111,6 @@ if cap is not None and start_button:
                     confidences.append(float(confidence))
 
         indices = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
-
         if len(indices) > 0:
             for i in indices.flatten():
                 x, y, w, h = boxes[i]
@@ -123,21 +124,25 @@ if cap is not None and start_button:
                 else:
                     detected_objects[label] = 1
 
-        # Kiểm tra vật thể mất
+        # Check lost objects
         for obj in object_names:
             required_count = monitor_counts[obj]
             current_count = detected_objects.get(obj, 0)
 
             if current_count < required_count:
-                lost_objects_frame[obj] = lost_objects_frame.get(obj, 0) + 1
-                if lost_objects_frame[obj] >= frame_limit and obj not in alerted_objects:
-                    alerted_objects.add(obj)
-                    lost_time_str = str(timedelta(seconds=int(lost_objects_frame[obj] / fps)))
-                    st.warning(f"⚠️ ALERT: '{obj}' is missing for {lost_time_str}!")
-                    play_alert_sound()
+                if obj not in lost_objects_time:
+                    lost_objects_time[obj] = frame_count  # Lưu thời điểm bắt đầu mất
+                elif (frame_count - lost_objects_time[obj]) >= frame_limit:
+                    if obj not in alerted_objects:
+                        alerted_objects.add(obj)
+                        alert_time = str(timedelta(seconds=lost_objects_time[obj] // fps))
+                        st.warning(f"⚠️ ALERT: '{obj}' is missing since {alert_time}!")
+                        play_alert_sound()
             else:
-                lost_objects_frame.pop(obj, None)
-                alerted_objects.discard(obj)
+                if obj in lost_objects_time:
+                    del lost_objects_time[obj]
+                if obj in alerted_objects:
+                    alerted_objects.remove(obj)
 
         stframe.image(frame, channels="BGR", use_container_width=True)
 
