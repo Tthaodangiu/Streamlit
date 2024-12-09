@@ -150,7 +150,7 @@ if cap is not None and start_button:
                     if obj not in alerted_objects and lost_duration >= frame_limit:
                         alerted_objects.add(obj)
                         st.warning(f"⚠️ ALERT: '{obj}' is missing for {lost_time_str}!")
-                        play_alert_sound()
+                        play_alert_sound()  # Phát âm thanh cảnh báo khi đối tượng bị mất
             else:  # Đối tượng quay lại
                 if obj in lost_objects_time:  # Vật thể quay lại sau khi mất
                     del lost_objects_time[obj]  # Xóa thời gian mất
