@@ -58,11 +58,11 @@ cap = None  # Biến để lưu nguồn video
 
 # Đọc file âm thanh cảnh báo (police.wav)
 def play_alert_sound():
-    alert_audio_file = '/mnt/data/police.wav'  # Đảm bảo rằng file police.wav đã được tải lên và có đường dẫn đúng
+    alert_audio_file = '/mnt/data/police.wav'  # Đường dẫn đến file âm thanh police.wav
     if os.path.exists(alert_audio_file):
         with open(alert_audio_file, 'rb') as f:
             audio_bytes = f.read()
-            st.audio(audio_bytes, format='audio/wav')  # Phát âm thanh cảnh báo
+            st.audio(audio_bytes, format='audio/wav')
 
 # Xử lý video từ nguồn
 if video_source == "Upload File":
@@ -150,7 +150,7 @@ if cap is not None and start_button:
                     if obj not in alerted_objects and lost_duration >= frame_limit:
                         alerted_objects.add(obj)
                         st.warning(f"⚠️ ALERT: '{obj}' is missing for {lost_time_str}!")
-                        play_alert_sound()  # Phát âm thanh cảnh báo khi mất đồ vật
+                        play_alert_sound()
             else:  # Đối tượng quay lại
                 if obj in lost_objects_time:  # Vật thể quay lại sau khi mất
                     del lost_objects_time[obj]  # Xóa thời gian mất
