@@ -40,7 +40,7 @@ st.sidebar.header("Settings")
 object_names_input = st.sidebar.text_input("Enter Object Names (comma separated)", "cell phone,laptop,umbrella")
 object_names = [obj.strip().lower() for obj in object_names_input.split(',')]
 monitor_counts = {}
-lost_objects_time = {}  # Thêm từ điển để theo dõi thời gian mất của từng đối tượng
+lost_objects_time = {}  # Từ điển theo dõi thời gian mất
 for obj in object_names:
     monitor_counts[obj] = st.sidebar.number_input(f"Enter number of {obj} to monitor", min_value=0, value=0, step=1)
 
@@ -54,11 +54,11 @@ temp_video_path = "temp_video.mp4"
 start_button = st.button("Start Detection")
 stop_button = st.button("Stop and Delete Video")
 
-cap = None  # Biến để lưu nguồn video
+cap = None
 
-# Đọc file âm thanh cảnh báo (police.wav)
+# Đọc file âm thanh cảnh báo
 def play_alert_sound():
-    alert_audio_file = '/mnt/data/police.wav'  # Đường dẫn đến file âm thanh police.wav
+    alert_audio_file = '/mnt/data/police.wav'
     if os.path.exists(alert_audio_file):
         with open(alert_audio_file, 'rb') as f:
             audio_bytes = f.read()
@@ -73,12 +73,11 @@ if video_source == "Upload File":
         st.success("Video uploaded successfully!")
         cap = cv2.VideoCapture(temp_video_path)
 
-# Kiểm tra nếu có video để xử lý
 if cap is not None and start_button:
     stframe = st.empty()
     detected_objects = {}
     lost_objects_time = {}
-    alerted_objects = set()  # Để theo dõi các đối tượng đã cảnh báo
+    alerted_objects = set()
     start_time = time()
 
     while True:
@@ -98,24 +97,20 @@ if cap is not None and start_button:
         confidences = []
         detected_objects.clear()
 
-        # Lấy thông tin từ các lớp đầu ra
+        # Phân tích kết quả
         for out in outs:
             for detection in out:
                 scores = detection[5:]
                 class_id = np.argmax(scores)
                 confidence = scores[class_id]
                 if confidence > 0.5:
-                    center_x = int(detection[0] * width)
-                    center_y = int(detection[1] * height)
-                    w = int(detection[2] * width)
-                    h = int(detection[3] * height)
-                    x = center_x - w // 2
-                    y = center_y - h // 2
+                    center_x, center_y, w, h = int(detection[0] * width), int(detection[1] * height), \
+                                               int(detection[2] * width), int(detection[3] * height)
+                    x, y = center_x - w // 2, center_y - h // 2
                     boxes.append([x, y, w, h])
                     class_ids.append(class_id)
                     confidences.append(float(confidence))
 
-        # Áp dụng Non-Maximum Suppression để loại bỏ các bounding box chồng lấp
         indices = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
 
         if len(indices) > 0:
@@ -123,12 +118,8 @@ if cap is not None and start_button:
                 x, y, w, h = boxes[i]
                 label = classes[class_ids[i]].lower()
                 color = COLORS[class_ids[i]]
-
-                # Vẽ bounding box và nhãn
                 cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
                 cv2.putText(frame, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-
-                # Đếm và theo dõi
                 if label in detected_objects:
                     detected_objects[label] += 1
                 else:
@@ -145,11 +136,9 @@ if cap is not None and start_button:
                     lost_objects_time[obj] = current_time
                 else:
                     lost_duration = current_time - lost_objects_time[obj]
-                    lost_time_str = str(timedelta(seconds=int(lost_duration)))
-
-                    if obj not in alerted_objects and lost_duration >= frame_limit:
+                    if lost_duration >= frame_limit and obj not in alerted_objects:
                         alerted_objects.add(obj)
-                        st.warning(f"⚠️ ALERT: '{obj}' is missing for {lost_time_str}!")
+                        st.warning(f"⚠️ ALERT: '{obj}' is missing for {str(timedelta(seconds=int(lost_duration)))}!")
                         play_alert_sound()
             else:
                 if obj in lost_objects_time:
