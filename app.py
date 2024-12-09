@@ -3,7 +3,6 @@ import numpy as np
 import streamlit as st
 import os
 import gdown
-from time import time
 from datetime import timedelta
 
 # Tải YOLO weights và config nếu chưa có
@@ -39,17 +38,18 @@ st.sidebar.header("Settings")
 object_names_input = st.sidebar.text_input("Enter Object Names (comma separated)", "cell phone,laptop,umbrella")
 object_names = [obj.strip().lower() for obj in object_names_input.split(',')]
 monitor_counts = {}
-lost_objects_time = {}  # Thời gian mất của từng đối tượng
+lost_objects_frame = {}  # Đếm frame mất
+alerted_objects = set()
+
 for obj in object_names:
     monitor_counts[obj] = st.sidebar.number_input(f"Enter number of {obj} to monitor", min_value=0, value=1, step=1)
 
-frame_limit = st.sidebar.slider("Set Frame Limit for Alarm (seconds)", 1, 10, 3)
+frame_limit_seconds = st.sidebar.slider("Set Frame Limit for Alarm (seconds)", 1, 10, 3)
 
 # Chọn nguồn video
 video_source = st.radio("Choose Video Source", ["Upload File"])
 temp_video_path = "temp_video.mp4"
 
-# Nút điều khiển
 start_button = st.button("Start Detection")
 stop_button = st.button("Stop and Delete Video")
 
@@ -74,8 +74,8 @@ if video_source == "Upload File":
 
 if cap is not None and start_button:
     stframe = st.empty()
-    detected_objects = {}
-    alerted_objects = set()
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_limit = int(fps * frame_limit_seconds)  # Tính ngưỡng frame mất
 
     while True:
         ret, frame = cap.read()
@@ -83,16 +83,17 @@ if cap is not None and start_button:
             st.warning("Video ended or no frames available.")
             break
 
+        height, width, _ = frame.shape
+        detected_objects = {}
+
         # Phát hiện vật thể
         blob = cv2.dnn.blobFromImage(frame, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
         net.setInput(blob)
         outs = net.forward(get_output_layers(net))
 
-        height, width, _ = frame.shape
         boxes = []
         class_ids = []
         confidences = []
-        detected_objects.clear()
 
         for out in outs:
             for detection in out:
@@ -122,23 +123,21 @@ if cap is not None and start_button:
                 else:
                     detected_objects[label] = 1
 
-        current_time = time()
+        # Kiểm tra vật thể mất
         for obj in object_names:
             required_count = monitor_counts[obj]
             current_count = detected_objects.get(obj, 0)
 
-            if current_count < required_count:  # Vật thể bị mất
-                if obj not in lost_objects_time:
-                    lost_objects_time[obj] = current_time  # Ghi nhận thời gian bắt đầu mất
-                else:
-                    lost_duration = current_time - lost_objects_time[obj]
-                    if lost_duration >= frame_limit and obj not in alerted_objects:
-                        alerted_objects.add(obj)
-                        st.warning(f"⚠️ ALERT: '{obj}' is missing for {str(timedelta(seconds=int(lost_duration)))}!")
-                        play_alert_sound()
-            else:  # Vật thể xuất hiện lại
-                lost_objects_time.pop(obj, None)  # Xóa thời gian mất
-                alerted_objects.discard(obj)  # Xóa cảnh báo
+            if current_count < required_count:
+                lost_objects_frame[obj] = lost_objects_frame.get(obj, 0) + 1
+                if lost_objects_frame[obj] >= frame_limit and obj not in alerted_objects:
+                    alerted_objects.add(obj)
+                    lost_time_str = str(timedelta(seconds=int(lost_objects_frame[obj] / fps)))
+                    st.warning(f"⚠️ ALERT: '{obj}' is missing for {lost_time_str}!")
+                    play_alert_sound()
+            else:
+                lost_objects_frame.pop(obj, None)
+                alerted_objects.discard(obj)
 
         stframe.image(frame, channels="BGR", use_container_width=True)
 
